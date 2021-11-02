@@ -15,13 +15,23 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, SeekBar.OnSeekBa
     lateinit var listView: ListView
     lateinit var adapter: SYXAdapter
     lateinit var musicList: ArrayList<Music>
+    lateinit var musicName: TextView
     lateinit var seekBar: SeekBar
     lateinit var seekTime: TextView
     lateinit var prev: ImageButton
     lateinit var pause: ImageButton
     lateinit var next: ImageButton
+    lateinit var selectType: ImageButton
     lateinit var musicService: MusicService
     var curentMusic: Int = 0
+
+    private object PlayType {
+        val SINGLE = 0
+        val RANDOM = 1
+        val ORDER = 2
+    }
+
+    var type = PlayType.ORDER
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,14 +41,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, SeekBar.OnSeekBa
         }
         Util.checkPublishPermission(this)
         musicList = Util.getMusicData(this)
-        val obj = object : SYXAdapter.OnItemClickLitener {
+        adapter = SYXAdapter(this, R.layout.list_item, musicList)
+        adapter.setOnClickLitener(object : SYXAdapter.OnItemClickLitener {
             override fun onItemClicked(position: Int) {
                 initMediaPlayer(position)
                 curentMusic = position
             }
-        }
-        adapter = SYXAdapter(this, R.layout.list_item, musicList)
-        adapter.setOnClickLitener(obj)
+        })
         listView = findViewById(R.id.list_view)
         listView.adapter = adapter
         seekBar = findViewById(R.id.seekbar)
@@ -50,26 +59,35 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, SeekBar.OnSeekBa
         pause.setOnClickListener(this)
         next = findViewById(R.id.next)
         next.setOnClickListener(this)
+        selectType = findViewById(R.id.type)
+        selectType.setOnClickListener(this)
         musicService = MusicService()
+        musicName = findViewById(R.id.musicName)
+        this.musicService.bindHandler(object : MusicService.CompleteHandler {
+            override fun complete() {
+                next()
+            }
+        })
     }
 
     private fun initMediaPlayer(position: Int) {
         val music = musicList.get(position)
-        musicService.initMediaPlayer(music)
+        this.musicService.reset()
         seekBar.max = (music.duration / 1000).toInt()
         seekBar.progress = 0
-        this.musicService.reset()
         val mHandler = Handler()
         //Make sure you update Seekbar on UI thread
         runOnUiThread(object : Runnable {
             override fun run() {
                 val mCurrentPosition: Int = musicService.getCurrentPosition()
                 seekBar.progress = mCurrentPosition / 1000
-                seekTime.text = Util.initTime(mCurrentPosition,music.duration)
+                seekTime.text = Util.initTime(mCurrentPosition, music.duration)
                 mHandler.postDelayed(this, 1)
             }
         })
         pause.setImageResource(R.mipmap.pause)
+        musicService.initMediaPlayer(music)
+        musicName.text = music.musicName
         Log.d("player", musicService.isPlaying().toString())
     }
 
@@ -78,18 +96,21 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, SeekBar.OnSeekBa
             R.id.prev -> prev()
             R.id.next -> next()
             R.id.pause -> pauseClicked()
+            R.id.type -> selectType()
         }
     }
 
     private fun prev() {
-        Log.d("click", "prev")
-        this.getPrevMusic().let { this.initMediaPlayer(it) }
+        this.getPrevMusic().let {
+            this.initMediaPlayer(it)
+            Log.d("click", "prev" + it.toString())
+        }
     }
 
     private fun getPrevMusic(): Int {
         if (curentMusic == 0) {
             curentMusic = musicList.count() - 1
-        } else{
+        } else {
             curentMusic -= 1
         }
         return curentMusic
@@ -97,17 +118,35 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, SeekBar.OnSeekBa
 
 
     private fun next() {
-        Log.d("click", "next")
-        this.getNextMusic().let { this.initMediaPlayer(it) }
+        this.getNextMusic().let {
+            this.initMediaPlayer(it)
+            Log.d("click", "next" + it.toString())
+        }
     }
 
     private fun getNextMusic(): Int {
-        if (curentMusic == musicList.count() - 1) {
-            curentMusic = 0
-        } else{
-            curentMusic += 1
+        when (type) {
+            PlayType.ORDER -> {
+                if (curentMusic == musicList.count() - 1) {
+                    curentMusic = 0
+                } else {
+                    curentMusic += 1
+                }
+            }
+            PlayType.RANDOM -> curentMusic = getRandomMusic()
+            PlayType.SINGLE -> curentMusic
         }
+
         return curentMusic
+    }
+
+    private fun random() {
+        Log.d("click", "random")
+        this.getRandomMusic().let { this.initMediaPlayer(it) }
+    }
+
+    private fun getRandomMusic(): Int {
+        return (0..(musicList.count() - 1)).random()
     }
 
     private fun pauseClicked() {
@@ -118,7 +157,22 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, SeekBar.OnSeekBa
         } else {
             pause.setImageResource(R.mipmap.pause)
         }
+    }
 
+    private fun selectType() {
+        val select = (this.type + 1) % 3
+        this.type = select
+        when (type) {
+            PlayType.ORDER -> {
+                selectType.setImageResource(R.mipmap.order)
+            }
+            PlayType.RANDOM -> {
+                selectType.setImageResource(R.mipmap.random)
+            }
+            PlayType.SINGLE -> {
+                selectType.setImageResource(R.mipmap.single)
+            }
+        }
     }
 
     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {

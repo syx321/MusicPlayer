@@ -9,12 +9,11 @@ import java.lang.Exception
 
 class MusicService {
     var player = MediaPlayer()
+    lateinit var handler : CompleteHandler
     fun initMediaPlayer(music: Music) {
 //        player = MediaPlayer.create(this, Uri.parse(path))
         try {
-            if (player.isPlaying) {
-                player.reset()
-            }
+            player.reset()
             player.setDataSource(music.path)
             player.prepare()
             player.start()
@@ -22,6 +21,15 @@ class MusicService {
             return
         }
 
+        player.setOnCompletionListener {
+            handler.complete()
+            Log.d("service","complete handler")
+        }
+
+    }
+
+    fun bindHandler(handler: CompleteHandler) {
+        this.handler = handler
     }
 
     fun pause() : Boolean{
@@ -54,5 +62,9 @@ class MusicService {
     fun onDestroy() {
         this.player.stop()
         this.player.release()
+    }
+
+    interface CompleteHandler {
+        fun complete()
     }
 }
